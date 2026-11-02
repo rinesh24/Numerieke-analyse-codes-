@@ -1,0 +1,44 @@
+Studentnummer: 20240584
+=========================================================================
+Opdracht 4: Radiale Warmtegeleiding (Studienotitie Uitwerking)
+
+%
+=========================================================================
+clc; clear; close all;
+
+%% STAP 1: Parameters Instellen % ————————————————————————- L = 1.20; %
+Lengte van de pijp [m] r_i = 0.030; % Binnenradius [m] r_o = 0.090; %
+Buitenradius [m] k0 = 0.20; % Thermische basis-geleidbaarheid [W/(m K)]
+beta = 0.50; % Parameter beta [-] T_i = 200; % Binnentemperatuur [°C]
+T_o = 50; % Buitentemperatuur [°C]
+
+%% STAP 2: Functiedefinities % ————————————————————————- % NOTE: Gebruik
+element-gewijze operatoren (./ en .) voor vectoren! k = @(r) k0 . (1 +
+beta .* log(r ./ r_i)); f = @(r) 1 ./ (2 * pi * L * r .* k(r));
+
+%% STAP 3: Numerieke Oplossing (Trapeziumregel, N = 100) %
+————————————————————————- N = 100; r_num = linspace(r_i, r_o, N + 1); h
+= (r_o - r_i) / N; y = f(r_num);
+
+% Splits de sommatie op om indexerings- en syntactische fouten te
+voorkomen: y_midden = sum(y(2:end-1)); % Som van tussenliggende punten
+Rth_num = (h / 2) * (y(1) + 2 * y_midden + y(end)); % Numerieke R_th
+[K/W] Q_num = (T_i - T_o) / Rth_num; % Numeriek warmteverlies [W]
+
+%% STAP 4: Analytische Oplossing (Exacte Integratie) %
+————————————————————————- % Via substitutie: u = 1 + beta * ln(r / r_i)
+u_upper = 1 + beta * log(r_o / r_i); Rth_exact = (1 / (2 * pi * L * k0 *
+beta)) * log(u_upper); % Exacte R_th [K/W] Q_exact = (T_i - T_o) /
+Rth_exact; % Exact warmteverlies [W]
+
+%% STAP 5: Foutanalyse (%) % ————————————————————————- err_Rth =
+abs((Rth_num - Rth_exact) / Rth_exact) * 100; err_Q = abs((Q_num -
+Q_exact) / Q_exact) * 100;
+
+%% STAP 6: Output / Resultaten Tonen % ————————————————————————-
+fprintf(‘=== RESULTATEN OPDRACHT 4 ===’); fprintf(‘R_th (Numeriek) =
+%.6f K/W’, Rth_num); fprintf(‘Q (Numeriek) = %.6f W’, Q_num);
+fprintf(‘R_th (Analytisch)= %.6f K/W’, Rth_exact); fprintf(‘Q
+(Analytisch)= %.6f W’, Q_exact); fprintf(‘—————————–’);
+fprintf(‘Relatieve Fout R_th = %.6e %%’, err_Rth); fprintf(‘Relatieve
+Fout Q = %.6e %%’, err_Q);

@@ -1,0 +1,127 @@
+
+clear;
+clc;
+
+% Opgave 1a: The mass moment of inertia
+
+% Properties
+m = 80;
+Ri = 0.15;
+Ro = 0.45;
+
+% The mass moment of inertia of the flywheel
+J = 0.5 * m * (Ri^2 + Ro^2);
+
+fprintf('Moment of inertia J = %.4f kg.m^2\n\n', J);
+
+% Opgave 1b: RK4 method
+
+w0 = 80;
+M0 = 8;
+c = 0.10;
+
+% DV
+f = @(w) -(M0 + c*w.^2)/J;
+
+% Initial and final values
+T = 10;
+h = 1;
+tolerance = 0.01;
+w_initial = w0;
+
+w_old = RK4(f, w_initial, T, h);
+
+fprintf('h = %.4f s, omega(10) = %.6f rad/s\n', ...
+    h, w_old(end,2));
+
+% Successively halve the time step until the two successive end values at t = 10 s differ by at most 0.01 rad/s
+
+while true
+    h = h/2;
+    w_new = RK4(f, w_initial, T, h);
+
+    difference = abs(w_new(end,2) - w_old(end,2));
+
+    fprintf(['h = %.4f s, omega(10) = %.6f rad/s, ' ...
+        'verschil = %.6f rad/s\n'], ...
+        h, w_new(end,2), difference);
+
+    if difference <= tolerance
+        break;
+    end
+
+    w_old = w_new;
+end
+
+% Finer solution
+t = w_new(:,1);
+omega = w_new(:,2);
+
+fprintf('\nGekozen tijdstap h = %.4f s\n', h);
+fprintf('Omega op t = 10 s: %.6f rad/s\n', omega(end));
+
+% Opgave 1c: Omega versus time plot
+
+figure;
+plot(t, omega, 'b-', 'LineWidth', 1.8);
+
+grid on;
+xlabel('Time t (s)');
+ylabel('Angular velocity \omega (rad/s)');
+title('Angular velocity of the flywheel over time');
+
+xlim([0 10]);
+ylim([0 85]);
+
+% Opgave 1d: Analytical solution
+
+omega_exact = sqrt(M0/c) .* tan( ...
+    atan(w0 * sqrt(c/M0)) ...
+    - (sqrt(M0*c)/J) .* t);
+
+% Compare analytical and RK4 solutions
+error = abs(omega_exact - omega);
+max_error = max(error);
+
+fprintf('Analytical omega at t = 10 s: %.6f rad/s\n', ...
+    omega_exact(end));
+fprintf('Maximum absolute error: %.8f rad/s\n', max_error);
+
+% Plot both solutions
+figure;
+plot(t, omega_exact, 'b-', 'LineWidth', 1.8);
+hold on;
+plot(t, omega, 'r--', 'LineWidth', 1.5);
+grid on;
+
+xlabel('Time t (s)');
+ylabel('Angular velocity \omega (rad/s)');
+title('Analytical solution compared with RK4');
+legend('Analytical solution', 'RK4 solution', ...
+    'Location', 'best');
+
+% RK4 method
+
+function result = RK4(f, w0, T, h)
+
+N = round(T/h);
+t = (0:N)' * h;
+w = zeros(N+1,1);
+w(1) = w0;
+
+for n = 1:N
+    wn = w(n);
+
+    k1 = f(wn);
+    k2 = f(max(0, wn + h*k1/2));
+    k3 = f(max(0, wn + h*k2/2));
+    k4 = f(max(0, wn + h*k3));
+
+    w_next = wn + h*(k1 + 2*k2 + 2*k3 + k4)/6;
+
+    % Prevent backward rotation so no negative answers
+    w(n+1) = max(0, w_next);
+end
+
+result = [t, w];
+end

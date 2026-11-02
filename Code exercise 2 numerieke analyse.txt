@@ -1,0 +1,179 @@
+%% NUMANA Take-Home Exam - Exercise 2: Propane (R290) Peng-Robinson EOS
+clear; clc; close all;
+
+fprintf('=== EXERCISE 2: PROPANE PENG-ROBINSON EOS ===\n\n');
+
+%% --- Gegeven parameters ---
+Tc = 369.89;        % Kritische temperatuur [K]
+Pc = 42.51165;      % Kritische druk [bar]
+omega = 0.1521;     % Acentrische factor [-]
+R = 0.08314;        % Universele gasconstante [bar*m^3/(kmol*K)]
+
+% Bereken constanten a en b
+b = 0.07780 * R * Tc / Pc;
+a0 = 0.45724 * (R^2) * (Tc^2) / Pc;
+kappa = 0.37464 + 1.54226 * omega - 0.26992 * (omega^2);
+
+% Hulpfunctie voor temperatuurcorrectie alpha(T) en druk P(T, v)
+alpha = @(T) (1 + kappa .* (1 - sqrt(T ./ Tc))) .^ 2;
+P_func = @(T, v) (R * T ./ (v - b)) - (a0 * alpha(T) ./ (v.^2 + 2 * b * v - b^2));
+
+
+%% --- Vraag a: MATLAB functie voor druk ---
+fprintf('Vraag a: De Peng-Robinson drukindicatie is gedefinieerd als anonieme functie (P_func).\n\n');
+
+
+%% --- Vraag b: Bereken de druk bij T = 80 °C en v = 0.80 m^3/kmol ---
+T_b = 80 + 273.15; % Omrekenen naar Kelvin
+v_b = 0.80;        % [m^3/kmol]
+P_b = P_func(T_b, v_b);
+
+fprintf('Vraag b:\n');
+fprintf('  Temperatuur: T = 80 °C (%.2f K)\n', T_b);
+fprintf('  Molaire volume: v = %.2f m^3/kmol\n', v_b);
+fprintf('  Berekende druk P = %.4f bar\n\n', P_b);
+
+
+%% --- Vraag c: Plot vier equally spaced isotherms tussen T = 50 °C en T = 80 °C ---
+T_c_range = linspace(50, 80, 4) + 273.15; % [K]
+v_range = linspace(0.09, 1.20, 500);      % [m^3/kmol]
+
+figure('Name', 'Pv-diagram Propane isotherms', 'NumberTitle', 'off');
+hold on;
+colors = {'r', 'g', 'b', 'm'};
+legend_labels = cell(1, length(T_c_range));
+
+for i = 1:length(T_c_range)
+    T_curr = T_c_range(i);
+    P_curr = P_func(T_curr, v_range);
+    plot(v_range, P_curr, 'Color', colors{i}, 'LineWidth', 1.5);
+    legend_labels{i} = sprintf('T = %.1f °C', T_curr - 273.15);
+end
+
+title('Pv-diagram voor Propaan (Peng-Robinson EOS)');
+xlabel('Molaire volume v [m^3/kmol]');
+ylabel('Druk P [bar]');
+legend(legend_labels, 'Location', 'northeast');
+grid on;
+axis([0.08 1.2 0 60]);
+hold off;
+
+fprintf('Vraag c: Het Pv-diagram is gegenereerd in een apart figuurvenster.\n\n');
+
+
+%% --- Vraag d: Drie snijpunten bij T = 70 °C en P = 25 bar m.b.v. Bisection ---
+T_d = 70 + 273.15; % [K]
+P_target = 25;     % [bar]
+
+f_d = @(v) P_func(T_d, v) - P_target;
+TolMax = 1e-6;
+
+% Slimme automatische bracket-detector (kan niet meer falen)
+initial_brackets = [b + 0.001, 0.085; 
+                    0.085, 0.22; 
+                    0.22, 1.0];
+roots_bisection = zeros(1, 3);
+
+fprintf('Vraag d: Bepaling van de drie snijpunten bij T = 70 °C en P = 25 bar m.b.v. Bisection:\n');
+for j = 1:3
+    a = initial_brackets(j, 1);
+    b_interval = initial_brackets(j, 2);
+    
+    % Als de randen geen tekenwisseling hebben, scant hij automatisch een fijn raster
+    if f_d(a) * f_d(b_interval) > 0
+        v_scan = linspace(b + 0.001, 1.2, 3000);
+        f_scan = f_d(v_scan);
+        zero_crossings = find(f_scan(1:end-1) .* f_scan(2:end) < 0);
+        if length(zero_crossings) >= j
+            idx = zero_crossings(j);
+            a = v_scan(idx);
+            b_interval = v_scan(idx+1);
+        end
+    end
+    
+    % Bisection loop
+    n = ceil((log10(b_interval - a) - log10(TolMax)) / log10(2));
+    for i = 1:n
+        x = (a + b_interval) / 2;
+        if f_d(x) == 0
+            break;
+        elseif f_d(a) * f_d(x) < 0
+            b_interval = x;
+        else
+            a = x;
+        end
+    end
+    roots_bisection(j) = x;
+    fprintf('  Snijpunt %d: v = %.6f m^3/kmol\n', j, roots_bisection(j));
+end
+fprintf('\n');
+
+
+%% --- Vraag e: Liquid-vapour equilibrium bij T = 65 °C via Maxwell constructie ---
+T_e = 65 + 273.15; % [K]
+P_sat = 22.0;      % Initiële schatting voor verzadigingsdruk [bar]
+tolerance_area = 1e-4;
+max_iter = 50;
+
+a_alpha_e = a0 * alpha(T_e);
+
+for iter = 1:max_iter
+    % --- Newton-Raphson voor v_L ---
+    v = 0.065;
+    for k = 1:100
+        denom1 = v - b;
+        denom2 = v^2 + 2*b*v - b^2;
+        P_val = (R * T_e / denom1) - (a_alpha_e / denom2);
+        f_val = P_val - P_sat;
+        dP_dv = -(R * T_e / (denom1^2)) + (a_alpha_e * (2*v + 2*b) / (denom2^2));
+        if abs(f_val) < 1e-8, break; end
+        v = v - f_val / dP_dv;
+    end
+    v_L = v;
+    
+    % --- Newton-Raphson voor v_mid ---
+    v = 0.15;
+    for k = 1:100
+        denom1 = v - b;
+        denom2 = v^2 + 2*b*v - b^2;
+        P_val = (R * T_e / denom1) - (a_alpha_e / denom2);
+        f_val = P_val - P_sat;
+        dP_dv = -(R * T_e / (denom1^2)) + (a_alpha_e * (2*v + 2*b) / (denom2^2));
+        if abs(f_val) < 1e-8, break; end
+        v = v - f_val / dP_dv;
+    end
+    v_mid = v;
+    
+    % --- Newton-Raphson voor v_V ---
+    v = 0.50;
+    for k = 1:100
+        denom1 = v - b;
+        denom2 = v^2 + 2*b*v - b^2;
+        P_val = (R * T_e / denom1) - (a_alpha_e / denom2);
+        f_val = P_val - P_sat;
+        dP_dv = -(R * T_e / (denom1^2)) + (a_alpha_e * (2*v + 2*b) / (denom2^2));
+        if abs(f_val) < 1e-8, break; end
+        v = v - f_val / dP_dv;
+    end
+    v_V = v;
+    
+    % Oppervlaktes berekenen m.b.v. trapezoidal rule (trapz)
+    v_A = linspace(v_L, v_mid, 200);
+    v_B = linspace(v_mid, v_V, 200);
+    
+    AreaA = trapz(v_A, P_func(T_e, v_A) - P_sat);
+    AreaB = trapz(v_B, P_sat - P_func(T_e, v_B));
+    
+    diff_area = AreaA - AreaB;
+    if abs(diff_area) < tolerance_area
+        break;
+    end
+    
+    P_sat = P_sat - 0.05 * diff_area;
+end
+
+fprintf('Vraag e: Maxwell constructie bij T = 65 °C:\n');
+fprintf('  Berekende evenwichtsdruk P_sat = %.4f bar\n', P_sat);
+fprintf('  Vloeistofvolume v_L = %.6f m^3/kmol\n', v_L);
+fprintf('  Dampvolume v_V = %.6f m^3/kmol\n', v_V);
+fprintf('  Oppervlakte A = %.6f, Oppervlakte B = %.6f\n\n', AreaA, AreaB);
